@@ -11,25 +11,54 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        includeAssets: ['icon-192x192.png', 'icon-512x512.png'],
         devOptions: {
           enabled: true // Para poder probarla localmente
         },
         manifest: {
-          name: 'OrganiData',
+          name: 'OrganiData - Compostaje',
           short_name: 'OrganiData',
+          description: 'Registra tu progreso de compostaje y calcula tu impacto ambiental',
           theme_color: '#10b981',
-          background_color: '#f8fafc',
+          background_color: '#f0fdf4',
           display: 'standalone',
+          orientation: 'portrait',
+          start_url: '/',
+          scope: '/',
+          lang: 'es',
+          categories: ['lifestyle', 'utilities'],
           icons: [
             {
               src: '/icon-192x192.png',
               sizes: '192x192',
-              type: 'image/png'
+              type: 'image/png',
+              purpose: 'any'
+            },
+            {
+              src: '/icon-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any maskable'
             }
           ]
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg}'] // Cachea estos archivos para offline
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          // Estrategia: network-first para API, cache-first para assets estáticos
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'supabase-api-cache',
+                expiration: {
+                  maxEntries: 50,
+                  maxAgeSeconds: 60 * 60 * 24 // 24 horas
+                },
+                networkTimeoutSeconds: 10
+              }
+            }
+          ]
         }
       })
     ],
