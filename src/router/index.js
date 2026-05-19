@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import LoginView from '../views/LoginView.vue';
+import SignupView from '../views/SignupView.vue';
 import DashboardView from '../views/DashboardView.vue';
 import AprendeView from '../views/AprendeView.vue';
 
@@ -11,6 +12,12 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: LoginView,
+      meta: { requiresAuth: false }
+    },
+    {
+      path: '/signup',
+      name: 'signup',
+      component: SignupView,
       meta: { requiresAuth: false }
     },
     {
@@ -49,10 +56,11 @@ const router = createRouter({
 // Navigation Guard
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore();
-  
+  const publicRoutes = ['/login', '/signup'];
+
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next('/login');
-  } else if (to.path === '/login' && authStore.isAuthenticated) {
+  } else if (publicRoutes.includes(to.path) && authStore.isAuthenticated) {
     next('/');
   } else {
     next();

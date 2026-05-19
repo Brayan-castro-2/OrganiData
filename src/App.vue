@@ -15,7 +15,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useAuthStore } from './stores/auth';
 import Header from './components/Header.vue';
 import BottomNav from './components/BottomNav.vue';
@@ -23,6 +23,10 @@ import ProfileModal from './components/ProfileModal.vue';
 
 const authStore = useAuthStore();
 const isProfileOpen = ref(false);
+
+onMounted(async () => {
+  await authStore.init();
+});
 </script>
 
 <style>
