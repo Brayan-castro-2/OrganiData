@@ -14,19 +14,21 @@
       </div>
     </div>
     <div class="flex items-center gap-2">
+      <!-- Badge de puntos -->
+      <button @click="$emit('openProfile')" class="flex items-center gap-1.5 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full hover:bg-amber-100 transition-colors">
+        <span class="text-sm">⭐</span>
+        <span class="text-xs font-extrabold text-amber-700">{{ db.user.puntos }}</span>
+      </button>
       <router-link to="/avisos" class="w-10 h-10 flex items-center justify-center rounded-full text-emerald-600 hover:bg-slate-100 transition-colors relative">
         <Bell size="24" />
         <span v-if="hasNewAvisos" class="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
       </router-link>
-      <button @click="$emit('openProfile')" class="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:text-emerald-600 hover:bg-slate-100 transition-colors" title="Mi Perfil">
-        <User size="20" />
-      </button>
     </div>
   </header>
 </template>
 
 <script setup>
-import { Bell, User } from 'lucide-vue-next';
+import { Bell } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
 import { db } from '../mocks/database';
 import { computed } from 'vue';

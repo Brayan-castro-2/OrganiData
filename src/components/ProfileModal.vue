@@ -39,6 +39,15 @@
               {{ db.user.direccion }}
             </p>
           </div>
+          <!-- Puntos Totales destacados -->
+          <div class="bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl px-6 py-4 w-full flex items-center justify-between shadow-md">
+            <div class="text-left">
+              <p class="text-xs font-bold text-amber-100 uppercase tracking-wide">Tus Puntos Verdes</p>
+              <p class="text-3xl font-extrabold text-white mt-0.5">{{ db.user.puntos }} <span class="text-sm font-medium text-amber-100">pts</span></p>
+            </div>
+            <div class="text-4xl">⭐</div>
+          </div>
+
           <!-- Impacto Ambiental (Kilos y Nivel) -->
           <div class="bg-slate-900 rounded-3xl p-6 border-2 border-emerald-500 w-full shadow-lg relative overflow-hidden">
             <!-- Background glow -->
@@ -81,7 +90,7 @@
           <!-- Stats -->
           <div class="grid grid-cols-2 gap-3 w-full">
             <div class="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
-              <p class="text-xl font-extrabold text-emerald-600">{{ db.registros.length }}</p>
+              <p class="text-xl font-extrabold text-emerald-600">{{ totalRegistros }}</p>
               <p class="text-[10px] text-slate-500 font-medium mt-0.5">Registros</p>
             </div>
             <div class="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
@@ -176,6 +185,11 @@ defineEmits(['close']);
 
 const authStore = useAuthStore();
 const router = useRouter();
+
+// Total de registros contando avances de todos los ciclos
+const totalRegistros = computed(() => {
+  return db.ciclosCompostaje.reduce((sum, ciclo) => sum + ciclo.avances.length, 0);
+});
 
 const nextLevelThreshold = computed(() => {
   const kg = db.user.totalKilosReciclados;

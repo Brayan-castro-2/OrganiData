@@ -92,10 +92,18 @@
 
     <!-- Toast Notification -->
     <Transition name="toast">
-      <div v-if="showToast" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-white px-6 py-4 rounded-2xl shadow-lg font-bold flex items-start gap-3 w-[90%] max-w-sm text-sm">
-        <CheckCircle size="20" class="shrink-0 mt-0.5" />
-        <span v-if="puntosOtorgadosRecientes">Avance guardado con éxito 🌱 (+15 pts)</span>
-        <span v-else>Avance registrado 🌿 (Recuerda que los puntos se otorgan 1 vez por semana para evitar estrés en tu compost).</span>
+      <div v-if="showToast" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-5 py-4 rounded-2xl shadow-xl flex items-center gap-4 w-[90%] max-w-sm">
+        <div class="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center shrink-0">
+          <CheckCircle size="20" class="text-white" />
+        </div>
+        <div class="flex-1">
+          <p class="text-sm font-bold text-white leading-tight">¡Avance registrado! 🌱</p>
+          <p v-if="puntosGanados > 0" class="text-xs font-medium text-slate-300 mt-0.5">
+            <span class="text-amber-400 font-bold">+{{ puntosGanados }} pts</span>
+            · Total: <span class="text-white font-bold">{{ db.user.puntos }} pts</span>
+          </p>
+          <p v-else class="text-xs font-medium text-slate-400 mt-0.5">Puntos cada 5 días para proteger tu compost 🌿</p>
+        </div>
       </div>
     </Transition>
     <!-- Exportar GeoJSON Oculto para devs -->
@@ -168,7 +176,7 @@ import confetti from 'canvas-confetti';
 const authStore = useAuthStore();
 const isModalOpen = ref(false);
 const showToast = ref(false);
-const puntosOtorgadosRecientes = ref(true);
+const puntosGanados = ref(0);
 
 const diasTranscurridosCiclo = computed(() => {
   const activeCycle = db.ciclosCompostaje.find(c => c.estado === 'Activo');
@@ -259,7 +267,7 @@ const finishHarvest = (litros) => {
 };
 
 const onProgressSaved = (puntosOtorgados) => {
-  puntosOtorgadosRecientes.value = puntosOtorgados;
+  puntosGanados.value = puntosOtorgados ? 15 : 0;
   showToast.value = true;
   setTimeout(() => {
     showToast.value = false;

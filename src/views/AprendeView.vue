@@ -113,7 +113,7 @@
       <h3 class="font-display text-lg font-bold text-slate-800 mb-4">Documentos Oficiales</h3>
       <div class="flex flex-col gap-3">
         <a 
-          href="https://mma.gob.cl/wp-content/uploads/2021/04/MANUAL-COMPOSTAJE-PARA-EL-HOGAR.pdf" 
+          href="/Guia-Compostaje-Domiciliario.pdf" 
           target="_blank"
           rel="noopener noreferrer"
           class="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors"
@@ -156,9 +156,17 @@
 
     <!-- Toast de puntos -->
     <Transition name="toast">
-      <div v-if="showPointsToast" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-white px-6 py-3 rounded-full shadow-lg font-bold flex items-center gap-2">
-        <Star size="18" class="fill-amber-300 text-amber-300" />
-        +10 puntos ganados 🌱
+      <div v-if="showPointsToast" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-5 py-4 rounded-2xl shadow-xl flex items-center gap-4 w-[90%] max-w-sm">
+        <div class="w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
+          <Star size="20" class="fill-white text-white" />
+        </div>
+        <div class="flex-1">
+          <p class="text-sm font-bold text-white leading-tight">¡Respuesta correcta!</p>
+          <p class="text-xs font-medium text-slate-300 mt-0.5">
+            <span class="text-amber-400 font-bold">+10 pts</span>
+            · Total: <span class="text-white font-bold">{{ db.user.puntos }} pts</span>
+          </p>
+        </div>
       </div>
     </Transition>
   </main>
