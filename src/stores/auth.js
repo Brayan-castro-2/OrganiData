@@ -110,20 +110,58 @@ export const useAuthStore = defineStore('auth', () => {
     }
   };
 
-  // ── LOGIN ─────────────────────────────────────────────────────
+  // ── CREDENCIALES DEMO (fallback local) ───────────────────────
+  // Permite usar la app sin una cuenta real en Supabase.
+  // Útil para demos, presentaciones y pruebas rápidas.
+  const DEMO_CREDENTIALS = [
+    { email: 'vecino@pmontt.cl', password: '1234' },
+    { email: 'demo@organidata.cl', password: 'demo123' },
+  ];
+
+
   const login = async (email, password) => {
     loading.value = true;
+
+    // 1. Intentar con Supabase Auth real
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      await _loadUser(data.user);
-      return { success: true };
-    } catch (err) {
-      console.error('Login error:', err);
-      return { success: false, message: _traducirError(err.message) };
-    } finally {
+      if (!error) {
+        await _loadUser(data.user);
+        loading.value = false;
+        return { success: true };
+      }
+    } catch { /* continúa al fallback */ }
+
+    // 2. Fallback: credenciales demo locales
+    const isDemo = DEMO_CREDENTIALS.some(
+      c => c.email === email.trim().toLowerCase() && c.password === password
+    );
+    if (isDemo) {
+      // import directo (no circular porque database.js no importa auth.js)
+      const { db } = await import('../mocks/database');
+      user.value = {
+        id: 'mock-user-001',
+        email: email.trim().toLowerCase(),
+        name: db.user.name,
+        sector: db.user.sector,
+        direccion: db.user.direccion,
+        puntos: db.user.puntos,
+        totalKilosReciclados: db.user.totalKilosReciclados,
+        current_week: db.user.current_week,
+        get nivel() {
+          if (this.totalKilosReciclados <= 10) return 'Semilla 🌱';
+          if (this.totalKilosReciclados <= 30) return 'Brote Activo 🌿';
+          if (this.totalKilosReciclados <= 50) return 'Árbol Fuerte 🌳';
+          return 'Guardián del Ecosistema 🌍';
+        },
+      };
+      isAuthenticated.value = true;
       loading.value = false;
+      return { success: true };
     }
+
+    loading.value = false;
+    return { success: false, message: 'Correo o contraseña incorrectos.' };
   };
 
   // ── LOGOUT ────────────────────────────────────────────────────
