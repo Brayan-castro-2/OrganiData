@@ -1,0 +1,6 @@
+{
+  "name": "OrganiData",
+  "description": "Una aplicación para gestionar el proceso de compostaje doméstico y aprender sobre sostenibilidad.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,285 @@
+<template>
+  <main class="px-6 py-6 flex flex-col gap-6 relative">
+    <!-- Copiloto / Diseño Anticipatorio -->
+    <div :class="['w-full rounded-xl p-4 transition-colors', estadoCopiloto]">
+      <p class="font-bold text-sm mb-1">📋 Tarea de hoy:</p>
+      <p class="text-sm font-medium">{{ mensajeCopiloto }}</p>
+    </div>
+
+    <section class="bg-white rounded-3xl shadow-sm p-8 flex flex-col items-center justify-center border border-slate-100">
+      <div 
+        class="relative w-48 h-48 rounded-full flex items-center justify-center shadow-inner" 
+        style="background: conic-gradient(rgb(16 185 129) 60%, rgb(241 245 249) 0);"
+      >
+        <div class="absolute inset-3 bg-white rounded-full flex flex-col items-center justify-center shadow-sm">
+          <span class="font-display text-2xl font-extrabold text-slate-800">Semana {{ authStore.user?.current_week || 3 }}</span>
+          <span class="text-sm font-semibold text-slate-500 mt-1">Fermentación</span>
+        </div>
+      </div>
+      <p class="text-center text-sm font-medium text-slate-500 mt-8 max-w-[220px] leading-relaxed">
+        Tu proceso va por buen camino. <span class="text-emerald-500 font-bold">¡Sigue así!</span>
+      </p>
+    </section>
+
+    <section class="flex flex-col gap-4">
+      <div class="flex gap-3">
+        <button 
+          @click="isModalOpen = true"
+          class="flex-1 bg-white text-slate-800 font-bold py-4 rounded-xl flex items-center justify-center gap-3 hover:bg-slate-50 transition-all shadow-sm border border-slate-200"
+        >
+          <Camera size="20" class="text-emerald-500" />
+          Registrar Avance
+        </button>
+        <button 
+          @click="showSOS"
+          class="w-14 shrink-0 bg-rose-100 text-rose-600 text-xl font-bold rounded-xl flex items-center justify-center hover:bg-rose-200 transition-colors shadow-sm"
+          title="S.O.S - Ayuda"
+        >
+          🚑
+        </button>
+      </div>
+      <button 
+        @click="openHarvestModal"
+        :class="['w-full font-bold py-4 rounded-full flex items-center justify-center gap-3 transition-all shadow-lg', !hasActiveCycle ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : diasTranscurridosCiclo < 60 ? 'bg-emerald-500/50 text-white cursor-not-allowed' : 'bg-emerald-500 text-white hover:bg-emerald-600 active:scale-[0.99]']"
+      >
+        <template v-if="!hasActiveCycle">
+          <Truck size="20" />
+          Sin ciclos activos 🚛
+        </template>
+        <template v-else>
+          <CheckCircle size="20" />
+          ¡Mi Compost está Listo!
+        </template>
+      </button>
+    </section>
+
+    <section class="bg-emerald-50 text-emerald-900 rounded-2xl p-6 shadow-sm border border-emerald-100 overflow-hidden relative">
+      <div class="absolute top-0 right-0 p-4 opacity-10">
+        <Lightbulb size="80" />
+      </div>
+      <div class="flex items-center gap-3 relative z-10">
+        <div class="p-2 bg-white/60 rounded-full">
+          <Lightbulb size="20" class="text-amber-500 fill-amber-500" />
+        </div>
+        <h3 class="font-display text-lg font-bold">Tip Oficial del Ministerio</h3>
+      </div>
+      <p class="text-sm mt-3 relative z-10 font-bold leading-relaxed opacity-90">
+        Si tu compostera huele a humedad, asegúrate de agregar material seco como cartón o aserrín hoy.
+      </p>
+    </section>
+
+    <!-- Tarjeta de Ranking -->
+    <router-link to="/comunidad" class="block bg-emerald-500 text-white rounded-2xl p-5 shadow-lg hover:bg-emerald-600 transition-all active:scale-[0.98] overflow-hidden relative group">
+      <div class="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-30 transition-opacity">
+        <Trophy size="64" />
+      </div>
+      <div class="flex items-center gap-3 relative z-10">
+        <div class="p-2 bg-white/20 rounded-full">
+          <Trophy size="22" class="text-white" />
+        </div>
+        <div>
+          <p class="text-base font-bold">🏆 Estás en el Top 3 de tu sector</p>
+          <p class="text-sm font-medium text-emerald-100 mt-0.5">¡Mira el Ranking!</p>
+        </div>
+      </div>
+    </router-link>
+
+    <RecordProgressModal 
+      :isOpen="isModalOpen" 
+      @close="isModalOpen = false" 
+      @saved="onProgressSaved" 
+    />
+
+    <!-- Toast Notification -->
+    <Transition name="toast">
+      <div v-if="showToast" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-white px-6 py-4 rounded-2xl shadow-lg font-bold flex items-start gap-3 w-[90%] max-w-sm text-sm">
+        <CheckCircle size="20" class="shrink-0 mt-0.5" />
+        <span v-if="puntosOtorgadosRecientes">Avance guardado con éxito 🌱 (+15 pts)</span>
+        <span v-else>Avance registrado 🌿 (Recuerda que los puntos se otorgan 1 vez por semana para evitar estrés en tu compost).</span>
+      </div>
+    </Transition>
+    <!-- Exportar GeoJSON Oculto para devs -->
+    <button 
+      @click="exportarGeoJSON"
+      class="text-xs text-slate-300 font-bold underline text-center mt-2 pb-6 w-full opacity-50 hover:opacity-100 transition-opacity cursor-pointer"
+    >
+      Exportar GeoJSON
+    </button>
+    <!-- Modal Cosecha -->
+    <Transition name="fade">
+      <div v-if="isHarvestModalOpen" class="fixed inset-0 bg-slate-900/60 z-[60] backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-xl flex flex-col gap-4 text-center">
+          <h2 class="font-display text-2xl font-bold text-slate-800">¡Felicidades! 🌾</h2>
+          <p class="text-sm font-medium text-slate-500 mb-2">¿Cuánto abono cosechaste de tu compostera?</p>
+          
+          <div class="flex flex-col gap-3">
+            <button 
+              @click="finishHarvest(10)"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center hover:bg-emerald-50 hover:border-emerald-300 transition-colors"
+            >
+              <span class="text-4xl mb-2">🪣</span>
+              <span class="font-bold text-slate-800">Medio Balde</span>
+              <span class="text-xs text-slate-500">(Aprox. 10 Litros)</span>
+            </button>
+            <button 
+              @click="finishHarvest(20)"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center hover:bg-emerald-50 hover:border-emerald-300 transition-colors"
+            >
+              <span class="text-4xl mb-2">🪣🪣</span>
+              <span class="font-bold text-slate-800">Un Balde Lleno</span>
+              <span class="text-xs text-slate-500">(Aprox. 20 Litros)</span>
+            </button>
+            <button 
+              @click="finishHarvest(40)"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center hover:bg-emerald-50 hover:border-emerald-300 transition-colors"
+            >
+              <span class="text-4xl mb-2">🛒</span>
+              <span class="font-bold text-slate-800">Carretilla / 2 Baldes</span>
+              <span class="text-xs text-slate-500">(Aprox. 40 Litros)</span>
+            </button>
+          </div>
+          
+          <button @click="isHarvestModalOpen = false" class="mt-2 text-sm font-bold text-slate-400 hover:text-slate-600">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Toast de Cosecha -->
+    <Transition name="toast">
+      <div v-if="showHarvestToast" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-white px-6 py-4 rounded-3xl shadow-xl w-[90%] max-w-sm text-center">
+        <span class="text-3xl block mb-2">🎉</span>
+        <p class="font-bold text-lg mb-1">¡Increíble!</p>
+        <p class="text-sm font-medium opacity-90 leading-tight">Acabas de evitar que {{ kilosCosechados }} kilos de basura lleguen al vertedero. Ganaste +100 puntos 🌍.</p>
+      </div>
+    </Transition>
+  </main>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue';
+import { Camera, CheckCircle, Lightbulb, Truck, Trophy } from 'lucide-vue-next';
+import { useAuthStore } from '../stores/auth';
+import { db } from '../mocks/database';
+import RecordProgressModal from '../components/RecordProgressModal.vue';
+import confetti from 'canvas-confetti';
+
+const authStore = useAuthStore();
+const isModalOpen = ref(false);
+const showToast = ref(false);
+const puntosOtorgadosRecientes = ref(true);
+
+const diasTranscurridosCiclo = computed(() => {
+  const activeCycle = db.ciclosCompostaje.find(c => c.estado === 'Activo');
+  if (!activeCycle) return 0;
+  
+  const start = new Date(activeCycle.fechaInicio);
+  const now = new Date();
+  const diffTime = Math.abs(now - start);
+  return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+});
+
+const lastRecordDays = computed(() => {
+  const activeCycle = db.ciclosCompostaje.find(c => c.estado === 'Activo');
+  if (!activeCycle || activeCycle.avances.length === 0) return 7; // 7+ si no hay registros
+
+  const lastDate = new Date(activeCycle.avances[activeCycle.avances.length - 1].fecha);
+  const now = new Date();
+  const diffTime = Math.abs(now - lastDate);
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+});
+
+const estadoCopiloto = computed(() => {
+  const days = lastRecordDays.value;
+  if (days <= 2) return 'bg-slate-100 text-slate-700 border border-slate-200';
+  if (days <= 6) return 'bg-blue-50 text-blue-700 border border-blue-200';
+  return 'bg-orange-50 text-orange-700 border border-orange-200';
+});
+
+const mensajeCopiloto = computed(() => {
+  const days = lastRecordDays.value;
+  if (days <= 2) return 'Todo en orden hoy 🌱. Déjalo descansar.';
+  if (days <= 6) return 'Hora de oxigenar 🌬️. Ve a darle una revuelta rápida con la pala.';
+  return '¡Toca revisión semanal! 📸 Toca abajo para registrar tu avance.';
+});
+
+const showSOS = () => {
+  alert('Tranquilo, ve a la sección Aprende para solucionar problemas comunes 🚑');
+};
+
+const exportarGeoJSON = () => {
+  const geojson = db.generarGeoJSON();
+  console.log('--- GEOJSON GENERADO ---');
+  console.log(JSON.stringify(geojson, null, 2));
+  alert('GeoJSON generado. Revisa la consola del navegador.');
+};
+
+const isHarvestModalOpen = ref(false);
+const showHarvestToast = ref(false);
+const kilosCosechados = ref(0);
+
+const hasActiveCycle = computed(() => {
+  return db.ciclosCompostaje.some(c => c.estado === 'Activo');
+});
+
+const openHarvestModal = () => {
+  if (!hasActiveCycle.value) return;
+  
+  if (diasTranscurridosCiclo.value < 60) {
+    alert("Tu compost está en proceso biológico. Podrás cosecharlo después del día 60. 🌱");
+    return;
+  }
+  
+  isHarvestModalOpen.value = true;
+};
+
+const finishHarvest = (litros) => {
+  const kilosEstimados = litros * 0.6;
+  kilosCosechados.value = kilosEstimados.toFixed(1);
+  
+  const activeCycle = db.ciclosCompostaje.find(c => c.estado === 'Activo');
+  if (activeCycle) {
+    activeCycle.cosechaKilos = kilosEstimados;
+    activeCycle.estado = 'Finalizado';
+  }
+  
+  db.user.puntos += 100;
+  
+  isHarvestModalOpen.value = false;
+
+  // 🎉 CONFETI
+  confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#10b981', '#34d399', '#fbbf24', '#f59e0b'] });
+  setTimeout(() => confetti({ particleCount: 80, spread: 120, origin: { y: 0.5 }, angle: 60, colors: ['#10b981', '#ffffff'] }), 300);
+  setTimeout(() => confetti({ particleCount: 80, spread: 120, origin: { y: 0.5 }, angle: 120, colors: ['#fbbf24', '#10b981'] }), 500);
+  
+  showHarvestToast.value = true;
+  setTimeout(() => { showHarvestToast.value = false; }, 6000);
+};
+
+const onProgressSaved = (puntosOtorgados) => {
+  puntosOtorgadosRecientes.value = puntosOtorgados;
+  showToast.value = true;
+  setTimeout(() => {
+    showToast.value = false;
+  }, 4000);
+};
+</script>
+
+<style scoped>
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -20px);
+}
+.toast-enter-to,
+.toast-leave-from {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+</style>
