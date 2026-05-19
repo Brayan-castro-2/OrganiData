@@ -6,19 +6,55 @@
       <p class="text-sm font-medium">{{ mensajeCopiloto }}</p>
     </div>
 
-    <section class="bg-white rounded-3xl shadow-sm p-8 flex flex-col items-center justify-center border border-slate-100">
-      <div 
-        class="relative w-48 h-48 rounded-full flex items-center justify-center shadow-inner" 
-        style="background: conic-gradient(rgb(16 185 129) 60%, rgb(241 245 249) 0);"
-      >
-        <div class="absolute inset-3 bg-white rounded-full flex flex-col items-center justify-center shadow-sm">
-          <span class="font-display text-2xl font-extrabold text-slate-800">Semana {{ authStore.user?.current_week || 3 }}</span>
-          <span class="text-sm font-semibold text-slate-500 mt-1">Fermentación</span>
+    <!-- Nivel + Impacto del usuario -->
+    <section class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+      <!-- Header del ciclo -->
+      <div class="p-6 pb-4 flex flex-col items-center gap-4">
+        <div 
+          class="relative w-40 h-40 rounded-full flex items-center justify-center shadow-inner" 
+          :style="`background: conic-gradient(rgb(16 185 129) ${nivelInfo.porcentajeProgreso}%, rgb(241 245 249) 0);`"
+        >
+          <div class="absolute inset-3 bg-white rounded-full flex flex-col items-center justify-center shadow-sm">
+            <span class="text-3xl">{{ nivelInfo.icono }}</span>
+            <span class="font-display text-sm font-extrabold text-slate-800 mt-1 text-center leading-tight px-2">{{ nivelInfo.nombre }}</span>
+          </div>
+        </div>
+
+        <!-- Kilos totales -->
+        <div class="text-center">
+          <p class="text-3xl font-extrabold text-emerald-600">{{ totalKilos.toFixed(1) }} <span class="text-base font-bold text-slate-400">Kg</span></p>
+          <p class="text-xs font-medium text-slate-500 mt-0.5">reciclados en total</p>
         </div>
       </div>
-      <p class="text-center text-sm font-medium text-slate-500 mt-8 max-w-[220px] leading-relaxed">
-        Tu proceso va por buen camino. <span class="text-emerald-500 font-bold">¡Sigue así!</span>
-      </p>
+
+      <!-- Barra de progreso al siguiente nivel -->
+      <div v-if="nivelInfo.siguienteNombre" class="px-6 pb-5">
+        <div class="flex justify-between text-[11px] font-bold text-slate-400 mb-1.5">
+          <span>{{ nivelInfo.nombre }} {{ nivelInfo.icono }}</span>
+          <span>{{ nivelInfo.siguienteNombre }} {{ nivelInfo.siguienteIcono }}</span>
+        </div>
+        <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+          <div 
+            class="h-full bg-emerald-500 rounded-full transition-all duration-700"
+            :style="{ width: nivelInfo.porcentajeProgreso + '%' }"
+          />
+        </div>
+        <p class="text-[11px] text-slate-400 text-right mt-1">Te faltan <strong class="text-emerald-600">{{ nivelInfo.kilosRestantes }} Kg</strong> para subir</p>
+      </div>
+
+      <!-- Impacto comparativo vs promedio Chile -->
+      <div class="mx-4 mb-5 bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
+        <p class="text-xs font-bold text-emerald-700 leading-relaxed">
+          🌍 {{ impactoInfo.texto }}
+        </p>
+        <div class="mt-2 w-full h-1.5 bg-emerald-200 rounded-full overflow-hidden">
+          <div 
+            class="h-full bg-emerald-500 rounded-full"
+            :style="{ width: Math.min(impactoInfo.porcentaje, 100) + '%' }"
+          />
+        </div>
+        <p class="text-[10px] text-emerald-600 font-medium mt-1 text-right">Promedio Chile: 4.2 Kg/semana</p>
+      </div>
     </section>
 
     <section class="flex flex-col gap-4">
@@ -100,7 +136,8 @@
           <p class="text-sm font-bold text-white leading-tight">¡Avance registrado! 🌱</p>
           <p v-if="puntosGanados > 0" class="text-xs font-medium text-slate-300 mt-0.5">
             <span class="text-amber-400 font-bold">+{{ puntosGanados }} pts</span>
-            · Total: <span class="text-white font-bold">{{ db.user.puntos }} pts</span>
+            · <span class="text-emerald-400 font-bold">+{{ kilosRegistrados }} Kg</span>
+            · Total: <span class="text-white font-bold">{{ authStore.user?.puntos ?? db.user.puntos }} pts</span>
           </p>
           <p v-else class="text-xs font-medium text-slate-400 mt-0.5">Puntos cada 5 días para proteger tu compost 🌿</p>
         </div>
@@ -172,11 +209,20 @@ import { useAuthStore } from '../stores/auth';
 import { db } from '../mocks/database';
 import RecordProgressModal from '../components/RecordProgressModal.vue';
 import confetti from 'canvas-confetti';
+import { calcularNivel, calcularImpacto } from '../composables/useNivel';
 
 const authStore = useAuthStore();
 const isModalOpen = ref(false);
 const showToast = ref(false);
 const puntosGanados = ref(0);
+const kilosRegistrados = ref(0);
+
+// Kilos totales: prioriza el store (Supabase) o el mock
+const totalKilos = computed(() =>
+  authStore.user?.totalKilosReciclados ?? db.user.totalKilosReciclados
+);
+const nivelInfo  = computed(() => calcularNivel(totalKilos.value));
+const impactoInfo = computed(() => calcularImpacto(totalKilos.value));
 
 const diasTranscurridosCiclo = computed(() => {
   const activeCycle = db.ciclosCompostaje.find(c => c.estado === 'Activo');
@@ -266,12 +312,11 @@ const finishHarvest = (litros) => {
   setTimeout(() => { showHarvestToast.value = false; }, 6000);
 };
 
-const onProgressSaved = (puntosOtorgados) => {
-  puntosGanados.value = puntosOtorgados ? 15 : 0;
+const onProgressSaved = ({ puntosOtorgados, kilosEstimados } = {}) => {
+  puntosGanados.value   = puntosOtorgados ? 15 : 0;
+  kilosRegistrados.value = kilosEstimados ?? 0;
   showToast.value = true;
-  setTimeout(() => {
-    showToast.value = false;
-  }, 4000);
+  setTimeout(() => { showToast.value = false; }, 4500);
 };
 </script>
 

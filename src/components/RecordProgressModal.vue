@@ -148,11 +148,12 @@
       <div class="absolute bottom-0 left-0 w-full p-6 bg-white/90 border-t border-slate-100 backdrop-blur-md">
         <button 
           @click="() => { if (navigator.vibrate) navigator.vibrate(50); save(); }"
-          :disabled="!selectedOlor || !selectedHumedad || kilosAportados <= 0"
-          :class="['w-full font-bold text-lg py-4 rounded-full shadow-lg transition-all flex items-center justify-center gap-2', (!selectedOlor || !selectedHumedad || kilosAportados <= 0) ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-500 text-white hover:bg-emerald-600 active:scale-[0.98]']"
+          :disabled="!selectedOlor || !selectedHumedad || kilosAportados <= 0 || saving"
+          :class="['w-full font-bold text-lg py-4 rounded-full shadow-lg transition-all flex items-center justify-center gap-2', (!selectedOlor || !selectedHumedad || kilosAportados <= 0 || saving) ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-500 text-white hover:bg-emerald-600 active:scale-[0.98]']"
         >
-          Guardar Registro
-          <Save size="20" />
+          <Loader2 v-if="saving" size="20" class="animate-spin" />
+          <Save v-else size="20" />
+          {{ saving ? 'Guardando...' : 'Guardar Registro' }}
         </button>
       </div>
     </div>
@@ -161,20 +162,25 @@
 
 <script setup>
 import { ref, watch, computed } from 'vue';
-import { X, Camera, CheckCircle2, Droplets, Waves, Save } from 'lucide-vue-next';
+import { X, Camera, CheckCircle2, Droplets, Waves, Save, Loader2 } from 'lucide-vue-next';
 import { db } from '../mocks/database';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../stores/auth';
 
 const props = defineProps({
   isOpen: Boolean
 });
 
 const emit = defineEmits(['close', 'saved']);
+const authStore = useAuthStore();
 
 const selectedOlor = ref(null);
 const selectedHumedad = ref(null);
 const kilosAportados = ref(1);
 const cameraInput = ref(null);
 const photoUrl = ref(null);
+const photoFile = ref(null); // archivo original para subir a Supabase
+const saving = ref(false);
 
 const incrementar = () => { kilosAportados.value = Math.round((kilosAportados.value + 0.5) * 10) / 10; };
 const decrementar = () => { kilosAportados.value = Math.max(0, Math.round((kilosAportados.value - 0.5) * 10) / 10); };
@@ -183,14 +189,13 @@ const setKilos = (val) => { kilosAportados.value = val; };
 const activeCycles = computed(() => db.ciclosCompostaje.filter(c => c.estado === 'Activo'));
 const selectedCycleId = ref(null);
 
-// Manejar la foto
+// Manejar la foto — guardar también el File original
 const onPhotoTaken = (event) => {
   const file = event.target.files[0];
   if (file) {
-    if (photoUrl.value) {
-      URL.revokeObjectURL(photoUrl.value); // Limpiar URL anterior
-    }
+    if (photoUrl.value) URL.revokeObjectURL(photoUrl.value);
     photoUrl.value = URL.createObjectURL(file);
+    photoFile.value = file;
   }
 };
 
@@ -205,26 +210,118 @@ watch(() => props.isOpen, (newVal) => {
       selectedOlor.value = null;
       selectedHumedad.value = null;
       kilosAportados.value = 1;
+      photoFile.value = null;
       if (photoUrl.value) {
         URL.revokeObjectURL(photoUrl.value);
         photoUrl.value = null;
       }
-    }, 300); // wait for animation
+    }, 300);
   }
 });
 
-const save = () => {
+const save = async () => {
   if (!selectedOlor.value || !selectedHumedad.value || kilosAportados.value <= 0) return;
-  
-  const result = db.saveRegistro({ 
-    olor: selectedOlor.value, 
-    humedad: selectedHumedad.value,
-    foto: photoUrl.value,
-    kilosAñadidos: kilosAportados.value
-  }, selectedCycleId.value);
-  
-  emit('saved', result.puntosOtorgados);
-  emit('close');
+  if (saving.value) return;
+
+  saving.value = true;
+  const kilosEstimados = kilosAportados.value;
+  const userId = authStore.user?.id;
+  const cicloId = selectedCycleId.value;
+
+  try {
+    // ── a) Subir foto a Supabase Storage (si existe) ──────────
+    let fotoUrl = null;
+    if (photoFile.value && userId) {
+      const ext = photoFile.value.name.split('.').pop();
+      const path = `${userId}/${cicloId || 'general'}/${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from('fotos-compost')
+        .upload(path, photoFile.value, { cacheControl: '3600', upsert: false });
+      if (!uploadErr) {
+        const { data: { publicUrl } } = supabase.storage.from('fotos-compost').getPublicUrl(path);
+        fotoUrl = publicUrl;
+      }
+    }
+
+    // ── b) Anti-fraude: verificar cooldown de 5 días ─────────
+    let puntosOtorgados = false;
+    if (cicloId) {
+      const { data: ultimoAvance } = await supabase
+        .from('avances')
+        .select('fecha')
+        .eq('ciclo_id', cicloId)
+        .order('fecha', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!ultimoAvance) {
+        puntosOtorgados = true; // primer avance siempre otorga puntos
+      } else {
+        const diasDiff = (Date.now() - new Date(ultimoAvance.fecha).getTime()) / (1000 * 60 * 60 * 24);
+        if (diasDiff >= 5) puntosOtorgados = true;
+      }
+    } else {
+      puntosOtorgados = true; // sin ciclo Supabase, usar mock
+    }
+
+    // ── c) Insertar avance en Supabase ────────────────────────
+    if (cicloId && userId) {
+      const { error: insertErr } = await supabase
+        .from('avances')
+        .insert({
+          ciclo_id:         cicloId,
+          user_id:          userId,
+          olor:             selectedOlor.value,
+          humedad:          selectedHumedad.value,
+          kilos_anadidos:   kilosEstimados,
+          foto_url:         fotoUrl,
+          puntos_otorgados: puntosOtorgados,
+        });
+      if (insertErr) console.warn('Error insertando avance:', insertErr.message);
+
+      // ── d) RPC: sumar kilos y puntos al perfil ────────────
+      if (kilosEstimados > 0) {
+        await supabase.rpc('incrementar_kilos', {
+          p_user_id: userId,
+          p_kilos:   kilosEstimados,
+        });
+        // Actualizar en el store local también
+        if (authStore.user) authStore.user.totalKilosReciclados += kilosEstimados;
+      }
+
+      if (puntosOtorgados) {
+        await supabase.rpc('sumar_puntos', {
+          p_user_id: userId,
+          p_puntos:  15,
+        });
+        if (authStore.user) authStore.user.puntos += 15;
+      }
+    }
+
+    // ── e) Actualizar mock local (para UI reactiva inmediata) ─
+    db.saveRegistro({
+      olor:          selectedOlor.value,
+      humedad:       selectedHumedad.value,
+      foto:          fotoUrl || photoUrl.value,
+      kilosAñadidos: kilosEstimados,
+    }, cicloId);
+
+    emit('saved', { puntosOtorgados, kilosEstimados });
+    emit('close');
+  } catch (err) {
+    console.error('Error guardando avance:', err);
+    // Fallback al mock si Supabase falla
+    const result = db.saveRegistro({
+      olor:          selectedOlor.value,
+      humedad:       selectedHumedad.value,
+      foto:          photoUrl.value,
+      kilosAñadidos: kilosEstimados,
+    }, cicloId);
+    emit('saved', { puntosOtorgados: result.puntosOtorgados, kilosEstimados });
+    emit('close');
+  } finally {
+    saving.value = false;
+  }
 };
 </script>
 

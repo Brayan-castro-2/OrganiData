@@ -57,19 +57,19 @@
               <div class="flex justify-between items-start">
                 <div class="text-left">
                   <p class="text-xs font-bold text-emerald-400 uppercase tracking-wide">Tu Impacto 🌍</p>
-                  <p class="text-3xl font-extrabold text-white mt-1">{{ db.user.totalKilosReciclados.toFixed(1) }} <span class="text-lg font-medium text-slate-400">Kg</span></p>
+                  <p class="text-3xl font-extrabold text-white mt-1">{{ totalKilos.toFixed(1) }} <span class="text-lg font-medium text-slate-400">Kg</span></p>
                 </div>
                 <div class="bg-emerald-500/20 px-3 py-1.5 rounded-full border border-emerald-500/30">
-                  <span class="text-xs font-bold text-emerald-400">{{ db.user.nivel }}</span>
+                  <span class="text-xs font-bold text-emerald-400">{{ nivelInfo.nombre }} {{ nivelInfo.icono }}</span>
                 </div>
               </div>
 
               <!-- Comparativo -->
               <div class="bg-slate-800/80 rounded-xl p-3">
                 <p class="text-xs text-slate-300 font-medium leading-relaxed">
-                  Una persona promedio en Chile bota 4.2 kg de materia orgánica a la semana. ¡Tú has reciclado <span class="text-white font-bold">{{ db.user.totalKilosReciclados.toFixed(1) }} kg</span>!
+                  Una persona promedio en Chile bota 4.2 kg de materia orgánica a la semana. ¡Tú has reciclado <span class="text-white font-bold">{{ totalKilos.toFixed(1) }} kg</span>!
                 </p>
-                <div v-if="db.user.totalKilosReciclados > 4.2" class="mt-2 inline-block bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded-md">
+                <div v-if="totalKilos > 4.2" class="mt-2 inline-block bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded-md">
                   ⭐ ¡Eres un Top Reciclador!
                 </div>
               </div>
@@ -77,13 +77,15 @@
               <!-- Barra de Progreso hacia el siguiente nivel -->
               <div class="flex flex-col gap-1.5">
                 <div class="flex justify-between text-[10px] font-bold text-slate-400">
-                  <span>{{ db.user.nivel }}</span>
-                  <span>{{ nextLevelText }}</span>
+                  <span>{{ nivelInfo.nombre }} {{ nivelInfo.icono }}</span>
+                  <span v-if="nivelInfo.siguienteNombre">{{ nivelInfo.siguienteNombre }} {{ nivelInfo.siguienteIcono }}</span>
+                  <span v-else>🏆 Nível Máximo</span>
                 </div>
                 <div class="w-full bg-slate-800 rounded-full h-2.5">
-                  <div class="bg-emerald-500 h-2.5 rounded-full" :style="{ width: progressPercentage + '%' }"></div>
+                  <div class="bg-emerald-500 h-2.5 rounded-full transition-all duration-700" :style="{ width: nivelInfo.porcentajeProgreso + '%' }"></div>
                 </div>
-                <p class="text-[10px] text-slate-500 text-right mt-0.5">Te faltan {{ kilosToNextLevel.toFixed(1) }} Kg para subir</p>
+                <p v-if="nivelInfo.kilosRestantes > 0" class="text-[10px] text-slate-500 text-right mt-0.5">Te faltan {{ nivelInfo.kilosRestantes }} Kg para subir</p>
+                <p v-else class="text-[10px] text-emerald-400 text-right mt-0.5">🌟 ¡Has alcanzado el nivel máximo!</p>
               </div>
             </div>
           </div>
@@ -179,6 +181,7 @@ import { X, Mail, MapPin, Award, Star, LogOut, Trophy } from 'lucide-vue-next';
 import { db } from '../mocks/database';
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
+import { calcularNivel } from '../composables/useNivel';
 
 defineProps({ isOpen: Boolean });
 defineEmits(['close']);
@@ -186,48 +189,21 @@ defineEmits(['close']);
 const authStore = useAuthStore();
 const router = useRouter();
 
+// Kilos totales: prioriza Supabase (authStore) si está disponible
+const totalKilos = computed(() =>
+  authStore.user?.totalKilosReciclados ?? db.user.totalKilosReciclados
+);
+
+// Nivel calculado con la función compartida
+const nivelInfo = computed(() => calcularNivel(totalKilos.value));
+
 // Total de registros contando avances de todos los ciclos
 const totalRegistros = computed(() => {
   return db.ciclosCompostaje.reduce((sum, ciclo) => sum + ciclo.avances.length, 0);
 });
 
-const nextLevelThreshold = computed(() => {
-  const kg = db.user.totalKilosReciclados;
-  if (kg <= 10) return 11;
-  if (kg <= 30) return 31;
-  if (kg <= 50) return 51;
-  return 100; // Max cap o algo simbólico
-});
-
-const nextLevelText = computed(() => {
-  const kg = db.user.totalKilosReciclados;
-  if (kg <= 10) return 'Brote Activo';
-  if (kg <= 30) return 'Árbol Fuerte';
-  if (kg <= 50) return 'Guardián';
-  return 'Máximo Nivel';
-});
-
-const progressPercentage = computed(() => {
-  const kg = db.user.totalKilosReciclados;
-  const target = nextLevelThreshold.value;
-  let base = 0;
-  if (kg > 10 && kg <= 30) base = 10;
-  else if (kg > 30 && kg <= 50) base = 30;
-  else if (kg > 50) return 100;
-
-  const currentLevelProgress = kg - base;
-  const currentLevelRange = target - base;
-  return Math.min(100, Math.max(0, (currentLevelProgress / currentLevelRange) * 100));
-});
-
-const kilosToNextLevel = computed(() => {
-  const kg = db.user.totalKilosReciclados;
-  if (kg > 50) return 0;
-  return nextLevelThreshold.value - kg;
-});
-
-const handleLogout = () => {
-  authStore.logout();
+const handleLogout = async () => {
+  await authStore.logout();
   router.push('/login');
 };
 </script>
